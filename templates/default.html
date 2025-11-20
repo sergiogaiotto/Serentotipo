@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Protótipos - Serendipidade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .loading-pulse {
+            animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .editable-area {
+            border: 2px dashed transparent;
+            transition: all 0.3s;
+        }
+        .editable-area:hover {
+            border-color: #9333ea;
+            background-color: #faf5ff;
+        }
+        .editable-area:focus {
+            border-color: #9333ea;
+            background-color: #faf5ff;
+            outline: none;
+        }
+        .edit-indicator {
+            display: none;
+            color: #9333ea;
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+        .editable-area:hover + .edit-indicator,
+        .editable-area:focus + .edit-indicator {
+            display: block;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen">
+    <div id="app" class="p-6">
+        <div class="max-w-7xl mx-auto">
+            <div class="bg-white rounded-lg shadow-2xl overflow-hidden">
+                <!-- Progress Bar -->
+                <div class="bg-gray-50 border-b border-gray-200 p-6">
+                    <div id="progress-bar" class="flex items-center justify-between mb-4"></div>
+                    <div class="text-center">
+                        <h2 id="step-title" class="text-xl font-bold text-gray-900"></h2>
+                    </div>
+                </div>
+
+                <!-- Main Content -->
+                <div class="p-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Left Column -->
+                        <div class="space-y-6">
+                            <div class="bg-purple-50 border-l-4 border-purple-600 p-4 rounded">
+                                <p id="agent-prompt" class="text-gray-800 font-medium"></p>
+                            </div>
+
+                            <div id="input-container">
+                                <textarea
+                                    id="user-input"
+                                    class="w-full h-32 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                                    placeholder="Ex: Um dashboard para rastrear hábitos diários com gamificação..."
+                                ></textarea>
+                            </div>
+
+                            <!-- Área de resposta editável -->
+                            <div id="agent-response-container" class="hidden">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="font-semibold text-gray-900">Resposta do Agente:</h3>
+                                    <button
+                                        id="toggle-edit-btn"
+                                        class="text-sm text-purple-600 hover:text-purple-800 font-medium"
+                                    >
+                                        ✏️ Modo Edição
+                                    </button>
+                                </div>
+                                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 relative">
+                                    <div
+                                        id="agent-response"
+                                        contenteditable="false"
+                                        class="text-gray-700 whitespace-pre-wrap text-sm editable-area min-h-[100px] p-2 rounded"
+                                    ></div>
+                                    <p class="edit-indicator">
+                                        ✏️ Clique para editar o texto. Suas alterações serão incluídas no contexto da próxima etapa.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <button
+                                id="submit-btn"
+                                class="w-full bg-purple-600 text-white py-3 rounded-lg font-medium hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Avançar
+                            </button>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="space-y-4">
+                            <div id="tabs-container" class="hidden flex space-x-2">
+                                <button
+                                    id="code-tab"
+                                    class="flex-1 py-2 rounded-lg font-medium transition-colors bg-purple-600 text-white"
+                                >
+                                    Código
+                                </button>
+                                <button
+                                    id="preview-tab"
+                                    class="flex-1 py-2 rounded-lg font-medium transition-colors bg-gray-200 text-gray-700"
+                                >
+                                    Preview
+                                </button>
+                            </div>
+
+                            <div id="code-container" class="hidden bg-gray-900 text-green-400 p-4 rounded-lg overflow-auto" style="height: 500px;">
+                                <pre id="generated-code" class="text-xs font-mono"></pre>
+                            </div>
+
+                            <div id="preview-container" class="hidden border-2 border-gray-300 rounded-lg overflow-hidden" style="height: 500px;">
+                                <iframe id="preview-frame" class="w-full h-full" title="Preview" sandbox="allow-scripts"></iframe>
+                            </div>
+
+                            <div id="placeholder-container" class="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center" style="height: 500px;">
+                                <svg class="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                                </svg>
+                                <p class="text-gray-500">O código gerado aparecerá aqui</p>
+                            </div>
+
+                            <div id="action-buttons" class="hidden space-y-2">
+                                <div class="flex space-x-2">
+                                    <button
+                                        id="download-btn"
+                                        class="flex-1 bg-green-600 text-white py-3 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                                    >
+                                        📄 Download HTML
+                                    </button>
+                                    <button
+                                        id="download-prompts-btn"
+                                        class="flex-1 bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                                    >
+                                        📋 Download Prompts
+                                    </button>
+                                </div>
+                                <button
+                                    id="reset-btn"
+                                    class="w-full bg-gray-600 text-white py-3 rounded-lg font-medium hover:bg-gray-700 transition-colors"
+                                >
+                                    🔄 Novo Protótipo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+        
+        const agents = [
+            { id: 'discovery', name: 'Descoberta & Serendipidade', prompt: 'Descreva brevemente a ideia ou problema que deseja prototipar:' },
+            { id: 'structure', name: 'Arquitetura & Estrutura', prompt: 'Refinando a estrutura técnica...' },
+            { id: 'design', name: 'Design & Experiência', prompt: 'Definindo experiência visual...' },
+            { id: 'implementation', name: 'Implementação', prompt: 'Gerando código funcional...' },
+            { id: 'refinement', name: 'Refinamento', prompt: 'Refinando e otimizando...' }
+        ];
+
+        let currentStep = 0;
+        let agentResponses = {};
+        let generatedCode = '';
+        let showingPreview = false;
+        let editMode = false;
+
+        const icons = {
+            discovery: `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z"/></svg>`,
+            structure: `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"/></svg>`,
+            design: `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a2 2 0 00-2 2v11a3 3 0 106 0V4a2 2 0 00-2-2H4zm1 14a1 1 0 100-2 1 1 0 000 2zm5-1.757l4.9-4.9a2 2 0 000-2.828L13.485 5.1a2 2 0 00-2.828 0L10 5.757v8.486zM16 18H9.071l6-6H16a2 2 0 012 2v2a2 2 0 01-2 2z" clip-rule="evenodd"/></svg>`,
+            implementation: `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>`,
+            refinement: `<svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>`
+        };
+
+        function renderProgressBar() {
+            const progressBar = document.getElementById('progress-bar');
+            progressBar.innerHTML = agents.map((agent, idx) => {
+                const statusClass = idx < currentStep ? 'bg-green-500' :
+                                   idx === currentStep ? 'bg-purple-600' :
+                                   'bg-gray-300';
+                
+                const connector = idx < agents.length - 1 ? 
+                    `<div class="w-16 h-1 mx-2 ${idx < currentStep ? 'bg-green-500' : 'bg-gray-300'}"></div>` : '';
+                
+                return `
+                    <div class="flex items-center">
+                        <div class="flex items-center justify-center w-10 h-10 rounded-full ${statusClass} text-white">
+                            ${icons[agent.id]}
+                        </div>
+                        ${connector}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateUI() {
+            const agent = agents[currentStep];
+            document.getElementById('step-title').textContent = `Etapa ${currentStep + 1}: ${agent.name}`;
+            document.getElementById('agent-prompt').textContent = agent.prompt;
+            
+            const userInput = document.getElementById('user-input');
+            const inputContainer = document.getElementById('input-container');
+            
+            if (currentStep === 0) {
+                inputContainer.classList.remove('hidden');
+                userInput.value = '';
+            } else {
+                inputContainer.classList.add('hidden');
+            }
+            
+            renderProgressBar();
+        }
+
+        // Toggle edit mode
+        document.getElementById('toggle-edit-btn').addEventListener('click', function() {
+            const responseDiv = document.getElementById('agent-response');
+            editMode = !editMode;
+            
+            responseDiv.contentEditable = editMode;
+            this.textContent = editMode ? '💾 Salvar Edição' : '✏️ Modo Edição';
+            
+            if (editMode) {
+                responseDiv.focus();
+                this.classList.add('bg-purple-100', 'px-3', 'py-1', 'rounded');
+            } else {
+                // Atualizar o conteúdo editado no agentResponses
+                const currentAgent = agents[currentStep].id;
+                agentResponses[currentAgent] = responseDiv.textContent;
+                this.classList.remove('bg-purple-100', 'px-3', 'py-1', 'rounded');
+            }
+        });
+
+        async function processAgent() {
+            const submitBtn = document.getElementById('submit-btn');
+            const userInput = document.getElementById('user-input').value;
+            
+            if (currentStep === 0 && !userInput.trim()) {
+                alert('Digite sua ideia');
+                return;
+            }
+            
+            // Salvar input do usuário na primeira etapa
+            if (currentStep === 0) {
+                agentResponses['user_input'] = userInput;
+            }
+            
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="loading-pulse">Processando...</span>';
+            
+            // Pegar contexto atualizado (pode ter sido editado)
+            const context = Object.values(agentResponses).filter(v => v !== agentResponses['user_input']).join('\n\n---\n\n');
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/process-agent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        agent_id: agents[currentStep].id,
+                        user_input: userInput,
+                        context: context
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Erro desconhecido');
+                }
+                
+                agentResponses[agents[currentStep].id] = data.response;
+                
+                const responseContainer = document.getElementById('agent-response-container');
+                const responseElement = document.getElementById('agent-response');
+                responseContainer.classList.remove('hidden');
+                
+                if (currentStep >= 3) {
+                    generatedCode = data.response;
+                    responseElement.textContent = 'Código gerado (visualizar na aba Código)';
+                    showCode();
+                } else {
+                    responseElement.textContent = data.response;
+                }
+                
+                // Garantir que edit mode está desabilitado ao carregar nova resposta
+                editMode = false;
+                responseElement.contentEditable = 'false';
+                document.getElementById('toggle-edit-btn').textContent = '✏️ Modo Edição';
+                document.getElementById('toggle-edit-btn').classList.remove('bg-purple-100', 'px-3', 'py-1', 'rounded');
+                
+                if (currentStep < agents.length - 1) {
+                    currentStep++;
+                    updateUI();
+                } else {
+                    submitBtn.textContent = 'Concluído';
+                }
+                
+            } catch (error) {
+                alert(`Erro: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+                if (currentStep < agents.length - 1) {
+                    submitBtn.textContent = 'Avançar';
+                }
+            }
+        }
+
+        function showCode() {
+            document.getElementById('placeholder-container').classList.add('hidden');
+            document.getElementById('tabs-container').classList.remove('hidden');
+            document.getElementById('action-buttons').classList.remove('hidden');
+            
+            document.getElementById('generated-code').textContent = generatedCode;
+            document.getElementById('code-container').classList.remove('hidden');
+            document.getElementById('preview-container').classList.add('hidden');
+            
+            document.getElementById('code-tab').className = 'flex-1 py-2 rounded-lg font-medium transition-colors bg-purple-600 text-white';
+            document.getElementById('preview-tab').className = 'flex-1 py-2 rounded-lg font-medium transition-colors bg-gray-200 text-gray-700';
+        }
+
+        function showPreview() {
+            document.getElementById('code-container').classList.add('hidden');
+            document.getElementById('preview-container').classList.remove('hidden');
+            
+            document.getElementById('preview-frame').srcdoc = generatedCode;
+            
+            document.getElementById('code-tab').className = 'flex-1 py-2 rounded-lg font-medium transition-colors bg-gray-200 text-gray-700';
+            document.getElementById('preview-tab').className = 'flex-1 py-2 rounded-lg font-medium transition-colors bg-purple-600 text-white';
+        }
+
+        function downloadCode() {
+            const blob = new Blob([generatedCode], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'prototipo-funcional.html';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function downloadPrompts() {
+            // Gerar documento com todos os prompts
+            const timestamp = new Date().toLocaleString('pt-BR');
+            
+            let content = `# GERADOR DE PROTÓTIPOS - REGISTRO COMPLETO
+# Gerado em: ${timestamp}
+# ============================================================
+
+`;
+            
+            // Adicionar input do usuário
+            content += `## 📝 INPUT DO USUÁRIO
+${document.getElementById('user-input').value || agentResponses['user_input'] || 'N/A'}
+
+============================================================
+
+`;
+            
+            // Adicionar cada etapa
+            const etapas = [
+                { 
+                    id: 'discovery', 
+                    nome: 'Etapa 1: Descoberta & Serendipidade',
+                    emoji: '💡',
+                    descricao: 'Análise criativa e identificação de direções serendípitas'
+                },
+                { 
+                    id: 'structure', 
+                    nome: 'Etapa 2: Arquitetura & Estrutura',
+                    emoji: '🏗️',
+                    descricao: 'Definição da estrutura técnica e componentes'
+                },
+                { 
+                    id: 'design', 
+                    nome: 'Etapa 3: Design & Experiência',
+                    emoji: '🎨',
+                    descricao: 'Proposta visual e experiência do usuário'
+                },
+                { 
+                    id: 'implementation', 
+                    nome: 'Etapa 4: Implementação',
+                    emoji: '⚙️',
+                    descricao: 'Código HTML/JavaScript/Tailwind gerado'
+                },
+                { 
+                    id: 'refinement', 
+                    nome: 'Etapa 5: Refinamento',
+                    emoji: '✨',
+                    descricao: 'Otimizações e melhorias finais'
+                }
+            ];
+            
+            etapas.forEach((etapa, index) => {
+                if (agentResponses[etapa.id]) {
+                    content += `## ${etapa.emoji} ${etapa.nome.toUpperCase()}
+### ${etapa.descricao}
+
+${agentResponses[etapa.id]}
+
+============================================================
+
+`;
+                }
+            });
+            
+            // Adicionar resumo no final
+            content += `## 📊 RESUMO DO PROCESSO
+
+**Total de Etapas Completadas:** ${Object.keys(agentResponses).length}
+**Data/Hora:** ${timestamp}
+**Metodologia:** Multiagentes com Serendipidade (LangGraph)
+
+============================================================
+
+## 🔗 PRÓXIMOS PASSOS
+
+1. Revisar cada etapa do processo
+2. Testar o protótipo HTML gerado
+3. Iterar baseado em feedback
+4. Expandir funcionalidades conforme necessário
+
+============================================================
+Gerado por: Gerador de Protótipos - Sergio Gaiotto
+Tecnologia: FastAPI + LangGraph + OpenAI
+============================================================
+`;
+            
+            // Criar arquivo markdown
+            const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `prompts-completo-${Date.now()}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            // Feedback visual
+            const btn = document.getElementById('download-prompts-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '✅ Download Concluído!';
+            btn.disabled = true;
+            
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }, 2000);
+        }
+
+        function resetApp() {
+            currentStep = 0;
+            agentResponses = {};
+            generatedCode = '';
+            editMode = false;
+            
+            document.getElementById('agent-response-container').classList.add('hidden');
+            document.getElementById('placeholder-container').classList.remove('hidden');
+            document.getElementById('tabs-container').classList.add('hidden');
+            document.getElementById('action-buttons').classList.add('hidden');
+            document.getElementById('code-container').classList.add('hidden');
+            document.getElementById('preview-container').classList.add('hidden');
+            
+            updateUI();
+        }
+
+        document.getElementById('submit-btn').addEventListener('click', processAgent);
+        document.getElementById('code-tab').addEventListener('click', showCode);
+        document.getElementById('preview-tab').addEventListener('click', showPreview);
+        document.getElementById('download-btn').addEventListener('click', downloadCode);
+        document.getElementById('download-prompts-btn').addEventListener('click', downloadPrompts);
+        document.getElementById('reset-btn').addEventListener('click', resetApp);
+
+        updateUI();
+    </script>
+</body>
+</html>
