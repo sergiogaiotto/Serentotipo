@@ -135,18 +135,6 @@ ReDoc: http://127.0.0.1:8000/redoc
 ✅ **Async/await** - Suporte nativo a operações assíncronas  
 ✅ **Padrões modernos** - OpenAPI 3.0, JSON Schema  
 
-## Diferenças Flask → FastAPI
-
-| Aspecto | Flask | FastAPI |
-|---------|-------|---------|
-| Port padrão | 5000 | 8000 |
-| Decorador rota | `@app.route()` | `@app.get()` / `@app.post()` |
-| Templates | `render_template()` | `templates.TemplateResponse()` |
-| Request body | `request.json` | `Pydantic model` |
-| Response | `jsonify()` | Return dict direto |
-| Docs | Manual | Automático (/docs) |
-| Async | Via extensões | Nativo |
-
 ## Fluxo de Operação
 
 1. Usuário descreve ideia inicial
